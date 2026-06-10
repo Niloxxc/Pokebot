@@ -5,7 +5,6 @@ import json
 import os
 import re
 import asyncio
-import xml.etree.ElementTree as ET
 from datetime import datetime
 from html.parser import HTMLParser
 
@@ -38,20 +37,49 @@ def default_config():
             "sleeves","hülle","ordner","binder","deck box","playmat","acryl",
             "case","psa","bgs","graded","proxy","fake","suche","wanted","tausch"
         ],
-        "rss_feeds": [
-            {"name": "Kleinanzeigen - Pokemon Booster", "url": "https://www.kleinanzeigen.de/s-pokemon-booster/k0/l0-rss.xml", "enabled": True},
-            {"name": "Kleinanzeigen - Pokemon Display", "url": "https://www.kleinanzeigen.de/s-pokemon-display/k0/l0-rss.xml", "enabled": True},
-            {"name": "Kleinanzeigen - Pokemon ETB", "url": "https://www.kleinanzeigen.de/s-pokemon-elite-trainer-box/k0/l0-rss.xml", "enabled": True},
-            {"name": "Kleinanzeigen - Pokemon TTB", "url": "https://www.kleinanzeigen.de/s-pokemon-top-trainer-box/k0/l0-rss.xml", "enabled": True},
-            {"name": "Kleinanzeigen - Pokemon Blister", "url": "https://www.kleinanzeigen.de/s-pokemon-blister/k0/l0-rss.xml", "enabled": True}
+        "shops": [
+            {"name": "Kleinanzeigen Booster", "url": "https://www.kleinanzeigen.de/s-pokemon-booster/k0", "enabled": True},
+            {"name": "Kleinanzeigen Display", "url": "https://www.kleinanzeigen.de/s-pokemon-display/k0", "enabled": True},
+            {"name": "Kleinanzeigen ETB", "url": "https://www.kleinanzeigen.de/s-elite-trainer-box-pokemon/k0", "enabled": True},
+            {"name": "Kleinanzeigen TTB", "url": "https://www.kleinanzeigen.de/s-top-trainer-box-pokemon/k0", "enabled": True},
+            {"name": "Kleinanzeigen Blister", "url": "https://www.kleinanzeigen.de/s-pokemon-blister/k0", "enabled": True}
         ],
         "seen_products": []
     }
 
-def fetch_url(url):
+class LinkTextParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.links = []
+        self._current_href = None
+        self._current_text = []
+        self._in_a = False
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "a":
+            self._in_a = True
+            self._current_text = []
+            for k, v in attrs:
+                if k == "href":
+                    self._current_href = v
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self._in_a:
+            text = " ".join(self._current_text).strip()
+            if self._current_href and text:
+                self.links.append((self._current_href, text))
+            self._in_a = False
+            self._current_href = None
+            self._current_text = []
+
+    def handle_data(self, data):
+        if self._in_a:
+            self._current_text.append(data.strip())
+
+def fetch_html(url):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
-        "Accept": "application/rss+xml, text/xml, */*",
+        "Accept": "text/html,application/xhtml+xml",
         "Accept-Language": "de-DE,de;q=0.9",
     }
     req = urllib.request.Request(url, headers=headers)
@@ -77,78 +105,52 @@ def extract_price(text):
             return val
     return None
 
-def extract_image(description_html):
-    if not description_html:
-        return None
-    m = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', description_html)
-    if m:
-        return m.group(1)
-    return None
-
 def matches(text, keywords, blocked):
     t = text.lower()
     return any(k.lower() in t for k in keywords) and not any(b.lower() in t for b in blocked)
 
-def scrape_rss(feed, cfg):
-    xml_data = fetch_url(feed["url"])
-    if not xml_data:
+def scrape_shop(shop, cfg):
+    html = fetch_html(shop["url"])
+    if not html:
         return []
-
+    parser = LinkTextParser()
+    parser.feed(html)
     results = []
     seen_ids = set(cfg.get("seen_products", []))
-
-    try:
-        # Namespace bereinigen
-        xml_data = re.sub(r' xmlns[^"]*"[^"]*"', '', xml_data)
-        root = ET.fromstring(xml_data)
-    except ET.ParseError as e:
-        print(f"[XML FEHLER] {feed['name']}: {e}")
-        return []
-
-    items = root.findall(".//item")
-    for item in items:
-        title = item.findtext("title", "").strip()
-        link = item.findtext("link", "").strip()
-        description = item.findtext("description", "")
-        price_text = item.findtext("price", "") or item.findtext("preis", "")
-
-        if not title or not link:
+    for href, text in parser.links:
+        title = re.sub(r"\s+", " ", text).strip()
+        if len(title) < 10:
             continue
-
-        # Preis aus Description oder eigenem Feld
-        price = extract_price(price_text) or extract_price(description) or extract_price(title)
-
-        # Bild aus Description
-        image_url = extract_image(description)
-
+        price = extract_price(title)
         if not matches(title, cfg["keywords"], cfg["blocked_keywords"]):
             continue
         if price and price > cfg["max_price_eur"]:
             continue
-
-        product_id = f"{feed['name']}::{title[:80]}"
+        if href.startswith("http"):
+            link = href
+        elif href.startswith("//"):
+            link = "https:" + href
+        elif href.startswith("/"):
+            from urllib.parse import urlparse
+            base = urlparse(shop["url"])
+            link = f"{base.scheme}://{base.netloc}{href}"
+        else:
+            continue
+        if "kleinanzeigen.de/s-anzeige" not in link:
+            continue
+        product_id = f"{shop['name']}::{title[:80]}"
         if product_id in seen_ids:
             continue
-
-        results.append({
-            "shop": "Kleinanzeigen",
-            "title": title[:120],
-            "price": price,
-            "link": link,
-            "image": image_url,
-            "id": product_id
-        })
+        results.append({"shop": "Kleinanzeigen", "title": title[:120], "price": price, "link": link, "id": product_id})
         seen_ids.add(product_id)
-
     return results[:10]
 
-# ── Discord Bot ───────────────────────────────────────────────────────────────
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 def build_embed(product):
-    price_text = f"**{product['price']:.2f} €**" if product["price"] else "Preis nicht angegeben"
+    price_text = f"**{product['price']:.2f} €**" if product["price"] else "Preis nicht angegeben — Link anklicken"
     embed = discord.Embed(
         title=product["title"][:256],
         url=product["link"],
@@ -157,9 +159,7 @@ def build_embed(product):
     )
     embed.add_field(name="💰 Preis", value=price_text, inline=True)
     embed.add_field(name="🏪 Shop", value=product["shop"], inline=True)
-    if product.get("image"):
-        embed.set_thumbnail(url=product["image"])
-    embed.set_footer(text="Pokemon Deal Bot • Jetzt kaufen")
+    embed.set_footer(text="Pokemon Deal Bot • Klicke den Titel für den Link")
     return embed
 
 @tasks.loop(minutes=10)
@@ -169,27 +169,22 @@ async def scan_shops():
     if not channel:
         print("[WARNUNG] Kanal nicht gefunden.")
         return
-
     scan_shops.change_interval(minutes=max(5, cfg["interval_minutes"]))
-    active_feeds = [f for f in cfg.get("rss_feeds", []) if f.get("enabled", True)]
-
+    active = [s for s in cfg["shops"] if s.get("enabled", True)]
     all_new = []
-    for feed in active_feeds:
+    for shop in active:
         loop = asyncio.get_event_loop()
-        new = await loop.run_in_executor(None, scrape_rss, feed, cfg)
+        new = await loop.run_in_executor(None, scrape_shop, shop, cfg)
         all_new.extend(new)
         await asyncio.sleep(2)
-
     if not all_new:
         print(f"[{datetime.now().strftime('%H:%M')}] Keine neuen Angebote.")
         return
-
     seen = cfg.get("seen_products", [])
     for product in all_new:
         await channel.send(embed=build_embed(product))
         seen.append(product["id"])
         await asyncio.sleep(0.5)
-
     cfg["seen_products"] = seen[-1000:]
     save_config(cfg)
     print(f"[{datetime.now().strftime('%H:%M')}] {len(all_new)} neue Angebote gesendet.")
@@ -197,10 +192,10 @@ async def scan_shops():
 @bot.command(name="status")
 async def status_cmd(ctx):
     cfg = load_config()
-    feeds_on = sum(1 for f in cfg.get("rss_feeds", []) if f.get("enabled"))
+    shops_on = sum(1 for s in cfg["shops"] if s.get("enabled"))
     embed = discord.Embed(title="Pokemon Deal Bot - Status", color=0x00BFFF)
     embed.add_field(name="Keywords", value=", ".join(cfg["keywords"]) or "-", inline=False)
-    embed.add_field(name="RSS Feeds aktiv", value=f"{feeds_on}/{len(cfg.get('rss_feeds', []))}", inline=True)
+    embed.add_field(name="Shops aktiv", value=f"{shops_on}/{len(cfg['shops'])}", inline=True)
     embed.add_field(name="Max. Preis", value=f"{cfg['max_price_eur']} EUR", inline=True)
     embed.add_field(name="Interval", value=f"{cfg['interval_minutes']} Min.", inline=True)
     await ctx.send(embed=embed)

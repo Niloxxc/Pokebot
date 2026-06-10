@@ -14,12 +14,12 @@
     "sleeves","hülle","ordner","binder","deck box","playmat","acryl",
     "case","psa","bgs","graded","proxy","fake","suche","wanted","tausch"
   ],
-  "rss_feeds": [
-    {"name": "Kleinanzeigen - Booster", "url": "https://www.kleinanzeigen.de/s-pokemon-booster/k0/l0-rss.xml", "enabled": true},
-    {"name": "Kleinanzeigen - Display", "url": "https://www.kleinanzeigen.de/s-pokemon-display/k0/l0-rss.xml", "enabled": true},
-    {"name": "Kleinanzeigen - ETB", "url": "https://www.kleinanzeigen.de/s-elite-trainer-box/k0/l0-rss.xml", "enabled": true},
-    {"name": "Kleinanzeigen - TTB", "url": "https://www.kleinanzeigen.de/s-top-trainer-box/k0/l0-rss.xml", "enabled": true},
-    {"name": "Kleinanzeigen - Blister", "url": "https://www.kleinanzeigen.de/s-pokemon-blister/k0/l0-rss.xml", "enabled": true}
+  "shops": [
+    {"name": "Kleinanzeigen Booster", "url": "https://www.kleinanzeigen.de/s-pokemon-booster/k0", "enabled": true},
+    {"name": "Kleinanzeigen Display", "url": "https://www.kleinanzeigen.de/s-pokemon-display/k0", "enabled": true},
+    {"name": "Kleinanzeigen ETB", "url": "https://www.kleinanzeigen.de/s-elite-trainer-box-pokemon/k0", "enabled": true},
+    {"name": "Kleinanzeigen TTB", "url": "https://www.kleinanzeigen.de/s-top-trainer-box-pokemon/k0", "enabled": true},
+    {"name": "Kleinanzeigen Blister", "url": "https://www.kleinanzeigen.de/s-pokemon-blister/k0", "enabled": true}
   ],
   "seen_products": []
 }
