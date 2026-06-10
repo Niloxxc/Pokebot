@@ -5,6 +5,7 @@ import json
 import os
 import re
 import asyncio
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from html.parser import HTMLParser
 
@@ -37,63 +38,20 @@ def default_config():
             "sleeves","hülle","ordner","binder","deck box","playmat","acryl",
             "case","psa","bgs","graded","proxy","fake","suche","wanted","tausch"
         ],
-        "shops": [
-            {"name": "eBay Kleinanzeigen", "url": "https://www.kleinanzeigen.de/s-pokemon-booster/k0", "enabled": True},
-            {"name": "Cardmarket", "url": "https://www.cardmarket.com/de/Pokemon/Products/Boosters", "enabled": True},
-            {"name": "Galaxus", "url": "https://www.galaxus.de/s1/q?q=pokemon+booster", "enabled": True},
-            {"name": "GameStop", "url": "https://www.gamestop.de/search/?q=pokemon+booster", "enabled": True},
-            {"name": "MediaMarkt", "url": "https://www.mediamarkt.de/de/search.html?query=pokemon+booster", "enabled": True},
-            {"name": "Saturn", "url": "https://www.saturn.de/de/search.html?query=pokemon+booster", "enabled": True},
-            {"name": "Amazon", "url": "https://www.amazon.de/s?k=pokemon+booster+display", "enabled": True},
-            {"name": "eBay", "url": "https://www.ebay.de/sch/i.html?_nkw=pokemon+booster+display", "enabled": True},
-            {"name": "Fantasywelt", "url": "https://www.fantasywelt.de/Pokemon-Karten", "enabled": True},
-            {"name": "Smyths Toys", "url": "https://www.smythstoys.com/de/de-de/search/?text=pokemon+booster", "enabled": True},
-            {"name": "myToys", "url": "https://www.mytoys.de/search/?q=pokemon+booster", "enabled": True},
-            {"name": "Rofu", "url": "https://www.rofu.de/search?sSearch=pokemon+booster", "enabled": True},
-            {"name": "Mueller", "url": "https://www.mueller.de/search/?q=pokemon+booster", "enabled": True},
-            {"name": "Thalia", "url": "https://www.thalia.de/suche?sq=pokemon+booster", "enabled": True},
-            {"name": "Helden der Freizeit", "url": "https://www.helden-der-freizeit.de/pokemon", "enabled": True},
-            {"name": "Mana Trade", "url": "https://www.manatrade.de/pokemon", "enabled": True},
-            {"name": "Karten-Dealer", "url": "https://www.karten-dealer.de/pokemon-booster", "enabled": True},
-            {"name": "ToyWiz", "url": "https://www.toywiz.de/pokemon", "enabled": True},
-            {"name": "Chaos Cards DE", "url": "https://www.chaoscards.de/pokemon", "enabled": True}
+        "rss_feeds": [
+            {"name": "Kleinanzeigen - Pokemon Booster", "url": "https://www.kleinanzeigen.de/s-pokemon-booster/k0/l0-rss.xml", "enabled": True},
+            {"name": "Kleinanzeigen - Pokemon Display", "url": "https://www.kleinanzeigen.de/s-pokemon-display/k0/l0-rss.xml", "enabled": True},
+            {"name": "Kleinanzeigen - Pokemon ETB", "url": "https://www.kleinanzeigen.de/s-pokemon-elite-trainer-box/k0/l0-rss.xml", "enabled": True},
+            {"name": "Kleinanzeigen - Pokemon TTB", "url": "https://www.kleinanzeigen.de/s-pokemon-top-trainer-box/k0/l0-rss.xml", "enabled": True},
+            {"name": "Kleinanzeigen - Pokemon Blister", "url": "https://www.kleinanzeigen.de/s-pokemon-blister/k0/l0-rss.xml", "enabled": True}
         ],
         "seen_products": []
     }
 
-class LinkTextParser(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.links = []
-        self._current_href = None
-        self._current_text = []
-        self._in_a = False
-
-    def handle_starttag(self, tag, attrs):
-        if tag == "a":
-            self._in_a = True
-            self._current_text = []
-            for k, v in attrs:
-                if k == "href":
-                    self._current_href = v
-
-    def handle_endtag(self, tag):
-        if tag == "a" and self._in_a:
-            text = " ".join(self._current_text).strip()
-            if self._current_href and text:
-                self.links.append((self._current_href, text))
-            self._in_a = False
-            self._current_href = None
-            self._current_text = []
-
-    def handle_data(self, data):
-        if self._in_a:
-            self._current_text.append(data.strip())
-
-def fetch_html(url):
+def fetch_url(url):
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml",
+        "Accept": "application/rss+xml, text/xml, */*",
         "Accept-Language": "de-DE,de;q=0.9",
     }
     req = urllib.request.Request(url, headers=headers)
@@ -109,87 +67,129 @@ def fetch_html(url):
         return None
 
 def extract_price(text):
+    if not text:
+        return None
     text = text.replace("\xa0", " ").replace(",", ".")
-    m = re.search(r"(\d{1,4}\.?\d{0,2})\s*[EUR€$£]|[EUR€$£]\s*(\d{1,4}\.?\d{0,2})", text)
+    m = re.search(r"(\d{1,4}\.?\d{0,2})\s*[€$£]|[€$£]\s*(\d{1,4}\.?\d{0,2})", text)
     if m:
         val = float(m.group(1) or m.group(2))
         if 0.5 < val < 10000:
             return val
     return None
 
+def extract_image(description_html):
+    if not description_html:
+        return None
+    m = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', description_html)
+    if m:
+        return m.group(1)
+    return None
+
 def matches(text, keywords, blocked):
     t = text.lower()
     return any(k.lower() in t for k in keywords) and not any(b.lower() in t for b in blocked)
 
-def scrape_shop(shop, cfg):
-    html = fetch_html(shop["url"])
-    if not html:
+def scrape_rss(feed, cfg):
+    xml_data = fetch_url(feed["url"])
+    if not xml_data:
         return []
-    parser = LinkTextParser()
-    parser.feed(html)
+
     results = []
     seen_ids = set(cfg.get("seen_products", []))
-    for href, text in parser.links:
-        title = re.sub(r"\s+", " ", text).strip()
-        if len(title) < 10:
+
+    try:
+        # Namespace bereinigen
+        xml_data = re.sub(r' xmlns[^"]*"[^"]*"', '', xml_data)
+        root = ET.fromstring(xml_data)
+    except ET.ParseError as e:
+        print(f"[XML FEHLER] {feed['name']}: {e}")
+        return []
+
+    items = root.findall(".//item")
+    for item in items:
+        title = item.findtext("title", "").strip()
+        link = item.findtext("link", "").strip()
+        description = item.findtext("description", "")
+        price_text = item.findtext("price", "") or item.findtext("preis", "")
+
+        if not title or not link:
             continue
-        price = extract_price(title)
+
+        # Preis aus Description oder eigenem Feld
+        price = extract_price(price_text) or extract_price(description) or extract_price(title)
+
+        # Bild aus Description
+        image_url = extract_image(description)
+
         if not matches(title, cfg["keywords"], cfg["blocked_keywords"]):
             continue
         if price and price > cfg["max_price_eur"]:
             continue
-        if href.startswith("http"):
-            link = href
-        elif href.startswith("//"):
-            link = "https:" + href
-        elif href.startswith("/"):
-            from urllib.parse import urlparse
-            base = urlparse(shop["url"])
-            link = f"{base.scheme}://{base.netloc}{href}"
-        else:
-            continue
-        product_id = f"{shop['name']}::{title[:80]}"
+
+        product_id = f"{feed['name']}::{title[:80]}"
         if product_id in seen_ids:
             continue
-        results.append({"shop": shop["name"], "title": title[:120], "price": price, "link": link, "id": product_id})
+
+        results.append({
+            "shop": "Kleinanzeigen",
+            "title": title[:120],
+            "price": price,
+            "link": link,
+            "image": image_url,
+            "id": product_id
+        })
         seen_ids.add(product_id)
+
     return results[:10]
 
+# ── Discord Bot ───────────────────────────────────────────────────────────────
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 def build_embed(product):
-    price_text = f"**{product['price']:.2f} EUR**" if product["price"] else "Preis unbekannt"
-    embed = discord.Embed(title=product["title"][:256], url=product["link"], color=0xFFCC00, timestamp=datetime.utcnow())
-    embed.add_field(name="Preis", value=price_text, inline=True)
-    embed.add_field(name="Shop", value=product["shop"], inline=True)
-    embed.set_footer(text="Pokemon Deal Bot")
+    price_text = f"**{product['price']:.2f} €**" if product["price"] else "Preis nicht angegeben"
+    embed = discord.Embed(
+        title=product["title"][:256],
+        url=product["link"],
+        color=0xFFCC00,
+        timestamp=datetime.utcnow()
+    )
+    embed.add_field(name="💰 Preis", value=price_text, inline=True)
+    embed.add_field(name="🏪 Shop", value=product["shop"], inline=True)
+    if product.get("image"):
+        embed.set_thumbnail(url=product["image"])
+    embed.set_footer(text="Pokemon Deal Bot • Jetzt kaufen")
     return embed
 
-@tasks.loop(minutes=30)
+@tasks.loop(minutes=10)
 async def scan_shops():
     cfg = load_config()
     channel = bot.get_channel(cfg["channel_id"])
     if not channel:
         print("[WARNUNG] Kanal nicht gefunden.")
         return
+
     scan_shops.change_interval(minutes=max(5, cfg["interval_minutes"]))
-    active = [s for s in cfg["shops"] if s.get("enabled", True)]
+    active_feeds = [f for f in cfg.get("rss_feeds", []) if f.get("enabled", True)]
+
     all_new = []
-    for shop in active:
+    for feed in active_feeds:
         loop = asyncio.get_event_loop()
-        new = await loop.run_in_executor(None, scrape_shop, shop, cfg)
+        new = await loop.run_in_executor(None, scrape_rss, feed, cfg)
         all_new.extend(new)
-        await asyncio.sleep(3)
+        await asyncio.sleep(2)
+
     if not all_new:
         print(f"[{datetime.now().strftime('%H:%M')}] Keine neuen Angebote.")
         return
+
     seen = cfg.get("seen_products", [])
     for product in all_new:
         await channel.send(embed=build_embed(product))
         seen.append(product["id"])
         await asyncio.sleep(0.5)
+
     cfg["seen_products"] = seen[-1000:]
     save_config(cfg)
     print(f"[{datetime.now().strftime('%H:%M')}] {len(all_new)} neue Angebote gesendet.")
@@ -197,30 +197,30 @@ async def scan_shops():
 @bot.command(name="status")
 async def status_cmd(ctx):
     cfg = load_config()
-    shops_on = sum(1 for s in cfg["shops"] if s.get("enabled"))
+    feeds_on = sum(1 for f in cfg.get("rss_feeds", []) if f.get("enabled"))
     embed = discord.Embed(title="Pokemon Deal Bot - Status", color=0x00BFFF)
     embed.add_field(name="Keywords", value=", ".join(cfg["keywords"]) or "-", inline=False)
-    embed.add_field(name="Shops aktiv", value=f"{shops_on}/{len(cfg['shops'])}", inline=True)
+    embed.add_field(name="RSS Feeds aktiv", value=f"{feeds_on}/{len(cfg.get('rss_feeds', []))}", inline=True)
     embed.add_field(name="Max. Preis", value=f"{cfg['max_price_eur']} EUR", inline=True)
     embed.add_field(name="Interval", value=f"{cfg['interval_minutes']} Min.", inline=True)
     await ctx.send(embed=embed)
 
 @bot.command(name="scan")
 async def scan_now(ctx):
-    await ctx.send("Starte sofortigen Scan...")
+    await ctx.send("🔍 Starte sofortigen Scan...")
     await scan_shops()
 
 @bot.command(name="setprice")
 async def set_price(ctx, preis: float):
     cfg = load_config(); cfg["max_price_eur"] = preis; save_config(cfg)
-    await ctx.send(f"Maximaler Preis auf {preis:.2f} EUR gesetzt.")
+    await ctx.send(f"✅ Maximaler Preis auf {preis:.2f} EUR gesetzt.")
 
 @bot.command(name="addkeyword")
 async def add_keyword(ctx, *, keyword: str):
     cfg = load_config()
     if keyword.lower() not in [k.lower() for k in cfg["keywords"]]:
         cfg["keywords"].append(keyword.lower()); save_config(cfg)
-        await ctx.send(f"Keyword '{keyword}' hinzugefugt.")
+        await ctx.send(f"✅ Keyword '{keyword}' hinzugefugt.")
     else:
         await ctx.send(f"'{keyword}' ist bereits vorhanden.")
 
@@ -230,7 +230,7 @@ async def remove_keyword(ctx, *, keyword: str):
     new_kws = [k for k in cfg["keywords"] if k.lower() != keyword.lower()]
     if len(new_kws) < len(cfg["keywords"]):
         cfg["keywords"] = new_kws; save_config(cfg)
-        await ctx.send(f"Keyword '{keyword}' entfernt.")
+        await ctx.send(f"✅ Keyword '{keyword}' entfernt.")
     else:
         await ctx.send(f"'{keyword}' nicht gefunden.")
 
