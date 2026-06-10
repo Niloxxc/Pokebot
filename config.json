@@ -1,5 +1,5 @@
 {
-  "discord_token": "TOKEN_HIER",
+  "discord_token": "TOKEN_WIRD_AUS_RAILWAY_GELADEN",
   "channel_id": 1462919742179246322,
   "interval_minutes": 10,
   "max_price_eur": 200,
@@ -58,25 +58,13 @@
     {"name": "Smyths Toys", "url": "https://www.smythstoys.com/de/de-de/search/?text=pokemon+booster", "enabled": true},
     {"name": "myToys", "url": "https://www.mytoys.de/search/?q=pokemon+booster", "enabled": true},
     {"name": "Rofu", "url": "https://www.rofu.de/search?sSearch=pokemon+booster", "enabled": true},
-    {"name": "Müller", "url": "https://www.mueller.de/search/?q=pokemon+booster", "enabled": true},
+    {"name": "Mueller", "url": "https://www.mueller.de/search/?q=pokemon+booster", "enabled": true},
     {"name": "Thalia", "url": "https://www.thalia.de/suche?sq=pokemon+booster", "enabled": true},
-    {"name": "Hugendubel", "url": "https://www.hugendubel.de/de/search?searchterm=pokemon+booster", "enabled": true},
     {"name": "Helden der Freizeit", "url": "https://www.helden-der-freizeit.de/pokemon", "enabled": true},
     {"name": "Mana Trade", "url": "https://www.manatrade.de/pokemon", "enabled": true},
     {"name": "Karten-Dealer", "url": "https://www.karten-dealer.de/pokemon-booster", "enabled": true},
     {"name": "ToyWiz", "url": "https://www.toywiz.de/pokemon", "enabled": true},
     {"name": "Chaos Cards DE", "url": "https://www.chaoscards.de/pokemon", "enabled": true}
   ],
-  "seen_products": [
-    "eBay Kleinanzeigen::Expedition Booster Pack PSA 9 Bisaflor Pokemon",
-    "eBay Kleinanzeigen::Premium Acryl Case für Pokemon Display (36er Booster Box)",
-    "eBay Kleinanzeigen::Pokemon Prismatic Evolutions Booster Bundle Englisch NEU",
-    "eBay Kleinanzeigen::11x Pokemon Obsidian Flammen Booster Deutsch",
-    "eBay Kleinanzeigen::2x Verschweißte Pokemon Booster Mystery Pack's",
-    "eBay Kleinanzeigen::Pokemon Booster Bundle - Mega Entwicklung inkl. 164 Karten",
-    "eBay Kleinanzeigen::Pokemon Booster Bundle - Fatale Flammen inkl. 150 Karten / Box 2",
-    "eBay Kleinanzeigen::Pokemon Booster Bundle - Fatale Flammen inkl. 150 Karten / Box 1",
-    "eBay Kleinanzeigen::Pokemon ewige Rivalen Booster",
-    "eBay Kleinanzeigen::SUCHE Pokemon Top Trainer Box TTB Booster Bundle Sets NEU SEALED"
-  ]
+  "seen_products": []
 }
