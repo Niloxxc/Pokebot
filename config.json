@@ -4,72 +4,22 @@
   "interval_minutes": 10,
   "max_price_eur": 200,
   "keywords": [
-    "booster display",
-    "booster box",
-    "36er booster",
-    "booster bundle",
-    "elite trainer box",
-    "top trainer box",
-    "etb",
-    "ttb",
-    "blister",
-    "tin box",
-    "tin",
-    "display",
-    "booster",
-    "special collection",
-    "kollektion",
-    "vorbestellung",
-    "restock",
-    "build & battle",
-    "build and battle"
+    "booster display","booster box","36er booster","booster bundle",
+    "elite trainer box","top trainer box","etb","ttb","blister","tin",
+    "display","booster","special collection","kollektion","vorbestellung",
+    "restock","build & battle","build and battle"
   ],
   "blocked_keywords": [
-    "einzelkarte",
-    "single",
-    "used",
-    "gebraucht",
-    "beschädigt",
-    "damaged",
-    "sleeves",
-    "hülle",
-    "ordner",
-    "binder",
-    "playmat",
-    "psa",
-    "bgs",
-    "graded",
-    "proxy",
-    "fake",
-    "suche",
-    "wanted",
-    "tausch",
-    "acryl case",
-    "spielbares deck",
-    "structure deck",
-    "yugioh",
-    "one piece",
-    "lorcana",
-    "magic the gathering",
-    "dragon ball",
-    "toploader",
-    "sleeve",
-    "portfolio",
-    "binder"
+    "einzelkarte","single","used","gebraucht","beschädigt","damaged",
+    "sleeves","hülle","ordner","binder","playmat","psa","bgs","graded",
+    "proxy","fake","suche","wanted","tausch","acryl case","spielbares deck",
+    "structure deck","yugioh","one piece","lorcana","magic the gathering",
+    "dragon ball","toploader","portfolio"
   ],
   "rossmann_products": [
-    {
-      "name": "Pokemon TCG Mini Tin",
-      "url": "https://www.rossmann.de/de/ideenwelt-amigo-pokemon-tcg-mini-tin/p/4007396203073"
-    },
-    {
-      "name": "Pokemon Boosterpack Ewige Rivalen",
-      "url": "https://www.rossmann.de/de/baby-und-spielzeug-amigo-pokemon-boosterpack-karmesin-und-purpur---ewige-rivalen/p/0196214110779"
-    },
-    {
-      "name": "Pokemon Booster Nr. 1",
-      "url": "https://www.rossmann.de/de/baby-und-spielzeug-amigo-pokemon-booster-nr-1/p/0820650250170"
-    }
+    {"name": "Pokemon TCG Mini Tin", "url": "https://www.rossmann.de/de/ideenwelt-amigo-pokemon-tcg-mini-tin/p/4007396203073"},
+    {"name": "Pokemon Boosterpack Ewige Rivalen", "url": "https://www.rossmann.de/de/baby-und-spielzeug-amigo-pokemon-boosterpack-karmesin-und-purpur---ewige-rivalen/p/0196214110779"},
+    {"name": "Pokemon Booster Nr. 1", "url": "https://www.rossmann.de/de/baby-und-spielzeug-amigo-pokemon-booster-nr-1/p/0820650250170"}
   ],
   "shops": [
     {"name": "Kleinanzeigen Booster", "url": "https://www.kleinanzeigen.de/s-pokemon-booster/k0", "enabled": true},
