@@ -42,11 +42,6 @@ def default_config():
             "structure deck","yugioh","one piece","lorcana","magic the gathering",
             "dragon ball","toploader","portfolio"
         ],
-        "rossmann_products": [
-            {"name": "Pokemon TCG Mini Tin", "url": "https://www.rossmann.de/de/ideenwelt-amigo-pokemon-tcg-mini-tin/p/4007396203073"},
-            {"name": "Pokemon Boosterpack Ewige Rivalen", "url": "https://www.rossmann.de/de/baby-und-spielzeug-amigo-pokemon-boosterpack-karmesin-und-purpur---ewige-rivalen/p/0196214110779"},
-            {"name": "Pokemon Booster Nr. 1", "url": "https://www.rossmann.de/de/baby-und-spielzeug-amigo-pokemon-booster-nr-1/p/0820650250170"}
-        ],
         "shops": [],
         "seen_products": []
     }
@@ -85,25 +80,6 @@ def extract_price(text):
 def matches(text, keywords, blocked):
     t = text.lower()
     return any(k.lower() in t for k in keywords) and not any(b.lower() in t for b in blocked)
-
-def check_rossmann(product):
-    driver = None
-    try:
-        driver = get_driver()
-        driver.get(product["url"])
-        time.sleep(3)
-        page = driver.page_source.lower()
-        available_keywords = ["in den warenkorb", "jetzt kaufen", "zum warenkorb"]
-        unavailable_keywords = ["nicht verfügbar", "ausverkauft", "nicht bestellbar"]
-        available = any(kw in page for kw in available_keywords) and not any(kw in page for kw in unavailable_keywords)
-        price = extract_price(driver.page_source)
-        return {"name": product["name"], "url": product["url"], "available": available, "price": price}
-    except Exception as e:
-        print(f"[ROSSMANN FEHLER] {product['name']}: {e}", flush=True)
-        return None
-    finally:
-        if driver:
-            driver.quit()
 
 def scrape_shop(shop, cfg):
     driver = None
@@ -145,7 +121,6 @@ def scrape_shop(shop, cfg):
     finally:
         if driver:
             driver.quit()
-    print(f"{shop['name']}: {len(results)} neue Produkte", flush=True)
     return results
 
 intents = discord.Intents.default()
@@ -160,16 +135,6 @@ def build_embed(product):
     embed.set_footer(text="Pokemon Deal Bot")
     return embed
 
-def build_rossmann_embed(result):
-    embed = discord.Embed(title=f"🟢 ROSSMANN VERFÜGBAR: {result['name']}", url=result["url"], color=0x00FF00, timestamp=datetime.utcnow())
-    price_text = f"**{result['price']:.2f} €**" if result["price"] else "Preis im Link"
-    embed.add_field(name="💰 Preis", value=price_text, inline=True)
-    embed.add_field(name="🏪 Shop", value="Rossmann", inline=True)
-    embed.set_footer(text="⚡ Schnell sein!")
-    return embed
-
-rossmann_status = {}
-
 @tasks.loop(minutes=10)
 async def scan_shops():
     cfg = load_config()
@@ -177,17 +142,6 @@ async def scan_shops():
     if not channel:
         return
     scan_shops.change_interval(minutes=max(5, cfg["interval_minutes"]))
-
-    for product in cfg.get("rossmann_products", []):
-        loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, check_rossmann, product)
-        if result:
-            was_available = rossmann_status.get(product["url"], False)
-            if result["available"] and not was_available:
-                await channel.send(embed=build_rossmann_embed(result))
-            rossmann_status[product["url"]] = result["available"]
-        await asyncio.sleep(2)
-
     active = [s for s in cfg["shops"] if s.get("enabled", True)]
     all_new = []
     for shop in active:
@@ -195,11 +149,8 @@ async def scan_shops():
         new = await loop.run_in_executor(None, scrape_shop, shop, cfg)
         all_new.extend(new)
         await asyncio.sleep(2)
-
     if not all_new:
-        print(f"[{datetime.now().strftime('%H:%M')}] Keine neuen Angebote.", flush=True)
         return
-
     seen = cfg.get("seen_products", [])
     for product in all_new:
         await channel.send(embed=build_embed(product))
@@ -207,17 +158,6 @@ async def scan_shops():
         await asyncio.sleep(0.5)
     cfg["seen_products"] = seen[-2000:]
     save_config(cfg)
-    print(f"[{datetime.now().strftime('%H:%M')}] {len(all_new)} neue Angebote gesendet.", flush=True)
-
-@bot.command(name="rossmann")
-async def rossmann_status_cmd(ctx):
-    cfg = load_config()
-    embed = discord.Embed(title="Rossmann Verfügbarkeit", color=0xCC0000)
-    for product in cfg.get("rossmann_products", []):
-        status = rossmann_status.get(product["url"])
-        val = "🟢 Verfügbar" if status is True else "🔴 Nicht verfügbar" if status is False else "⚪ Noch nicht geprüft"
-        embed.add_field(name=product["name"], value=val, inline=False)
-    await ctx.send(embed=embed)
 
 @bot.command(name="status")
 async def status_cmd(ctx):
@@ -226,7 +166,6 @@ async def status_cmd(ctx):
     embed = discord.Embed(title="Pokemon Deal Bot - Status", color=0x00BFFF)
     embed.add_field(name="Keywords", value=", ".join(cfg["keywords"]) or "-", inline=False)
     embed.add_field(name="Shops aktiv", value=f"{shops_on}/{len(cfg['shops'])}", inline=True)
-    embed.add_field(name="Rossmann", value=f"{len(cfg.get('rossmann_products', []))} Produkte", inline=True)
     embed.add_field(name="Max. Preis", value=f"{cfg['max_price_eur']} EUR", inline=True)
     embed.add_field(name="Interval", value=f"{cfg['interval_minutes']} Min.", inline=True)
     await ctx.send(embed=embed)
@@ -266,7 +205,6 @@ async def hilfe(ctx):
     for cmd, desc in [
         ("!status", "Aktuellen Status anzeigen"),
         ("!scan", "Sofort einen Scan starten"),
-        ("!rossmann", "Rossmann Verfügbarkeit prüfen"),
         ("!setprice 100", "Max. Preis setzen"),
         ("!addkeyword charizard", "Keyword hinzufugen"),
         ("!removekeyword booster", "Keyword entfernen"),
