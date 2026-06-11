@@ -1,15 +1,12 @@
 import discord
 from discord.ext import commands, tasks
+import urllib.request
 import json
 import os
 import re
 import asyncio
 from datetime import datetime
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-import time
+from html.parser import HTMLParser
 
 CONFIG_FILE = "config.json"
 
@@ -42,24 +39,62 @@ def default_config():
             "structure deck","yugioh","one piece","lorcana","magic the gathering",
             "dragon ball","toploader","portfolio"
         ],
-        "shops": [],
+        "shops": [
+            {"name": "Kleinanzeigen Booster", "url": "https://www.kleinanzeigen.de/s-pokemon-booster/k0", "enabled": True},
+            {"name": "Kleinanzeigen Display", "url": "https://www.kleinanzeigen.de/s-pokemon-display/k0", "enabled": True},
+            {"name": "Kleinanzeigen ETB", "url": "https://www.kleinanzeigen.de/s-elite-trainer-box-pokemon/k0", "enabled": True},
+            {"name": "Kleinanzeigen TTB", "url": "https://www.kleinanzeigen.de/s-top-trainer-box-pokemon/k0", "enabled": True},
+            {"name": "Kleinanzeigen Blister", "url": "https://www.kleinanzeigen.de/s-pokemon-blister/k0", "enabled": True}
+        ],
         "seen_products": []
     }
 
-def get_driver():
-    options = Options()
-    options.add_argument("--headless=new")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--window-size=1920,1080")
-    options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option("useAutomationExtension", False)
-    driver = webdriver.Chrome(options=options)
-    driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-    return driver
+class LinkTextParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.links = []
+        self._current_href = None
+        self._current_text = []
+        self._in_a = False
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "a":
+            self._in_a = True
+            self._current_text = []
+            for k, v in attrs:
+                if k == "href":
+                    self._current_href = v
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self._in_a:
+            text = " ".join(self._current_text).strip()
+            if self._current_href and text:
+                self.links.append((self._current_href, text))
+            self._in_a = False
+            self._current_href = None
+            self._current_text = []
+
+    def handle_data(self, data):
+        if self._in_a:
+            self._current_text.append(data.strip())
+
+def fetch_html(url):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml",
+        "Accept-Language": "de-DE,de;q=0.9",
+    }
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = resp.read()
+            try:
+                return raw.decode("utf-8")
+            except UnicodeDecodeError:
+                return raw.decode("latin-1", errors="replace")
+    except Exception as e:
+        print(f"[FEHLER] {url}: {e}", flush=True)
+        return None
 
 def extract_price(text):
     if not text:
@@ -77,46 +112,41 @@ def matches(text, keywords, blocked):
     return any(k.lower() in t for k in keywords) and not any(b.lower() in t for b in blocked)
 
 def scrape_shop(shop, cfg):
-    driver = None
+    html = fetch_html(shop["url"])
+    if not html:
+        return []
+    parser = LinkTextParser()
+    parser.feed(html)
     results = []
     seen_ids = set(cfg.get("seen_products", []))
-    try:
-        driver = get_driver()
-        driver.get(shop["url"])
-        time.sleep(4)
-        links = driver.find_elements(By.TAG_NAME, "a")
-        for link in links:
-            try:
-                title = link.text.strip()
-                href = link.get_attribute("href") or ""
-                if len(title) < 8 or not href.startswith("http"):
-                    continue
-                price = extract_price(title)
-                if not price:
-                    try:
-                        parent = link.find_element(By.XPATH, "./..")
-                        price = extract_price(parent.text)
-                    except:
-                        pass
-                if not matches(title, cfg["keywords"], cfg["blocked_keywords"]):
-                    continue
-                if price and price > cfg["max_price_eur"]:
-                    continue
-                product_id = f"{shop['name']}::{title[:80]}"
-                if product_id in seen_ids:
-                    continue
-                results.append({"shop": shop["name"], "title": title[:120], "price": price, "link": href, "id": product_id})
-                seen_ids.add(product_id)
-                if len(results) >= 8:
-                    break
-            except:
-                continue
-    except Exception as e:
-        print(f"[FEHLER] {shop['name']}: {e}", flush=True)
-    finally:
-        if driver:
-            driver.quit()
-    return results
+    for href, text in parser.links:
+        title = re.sub(r"\s+", " ", text).strip()
+        if len(title) < 10:
+            continue
+        price = extract_price(title)
+        if not matches(title, cfg["keywords"], cfg["blocked_keywords"]):
+            continue
+        if price and price > cfg["max_price_eur"]:
+            continue
+        if href.startswith("http"):
+            link = href
+        elif href.startswith("//"):
+            link = "https:" + href
+        elif href.startswith("/"):
+            from urllib.parse import urlparse
+            base = urlparse(shop["url"])
+            link = f"{base.scheme}://{base.netloc}{href}"
+        else:
+            continue
+        if "kleinanzeigen.de/s-anzeige" not in link:
+            continue
+        product_id = f"{shop['name']}::{title[:80]}"
+        if product_id in seen_ids:
+            continue
+        results.append({"shop": shop["name"], "title": title[:120], "price": price, "link": link, "id": product_id})
+        seen_ids.add(product_id)
+    print(f"{shop['name']}: {len(results)} neue Anzeigen", flush=True)
+    return results[:10]
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -135,6 +165,7 @@ async def scan_shops():
     cfg = load_config()
     channel = bot.get_channel(cfg["channel_id"])
     if not channel:
+        print("[WARNUNG] Kanal nicht gefunden.", flush=True)
         return
     scan_shops.change_interval(minutes=max(5, cfg["interval_minutes"]))
     active = [s for s in cfg["shops"] if s.get("enabled", True)]
@@ -145,14 +176,16 @@ async def scan_shops():
         all_new.extend(new)
         await asyncio.sleep(2)
     if not all_new:
+        print(f"[{datetime.now().strftime('%H:%M')}] Keine neuen Angebote.", flush=True)
         return
     seen = cfg.get("seen_products", [])
     for product in all_new:
         await channel.send(embed=build_embed(product))
         seen.append(product["id"])
         await asyncio.sleep(0.5)
-    cfg["seen_products"] = seen[-2000:]
+    cfg["seen_products"] = seen[-1000:]
     save_config(cfg)
+    print(f"[{datetime.now().strftime('%H:%M')}] {len(all_new)} neue Angebote gesendet.", flush=True)
 
 @bot.command(name="status")
 async def status_cmd(ctx):
