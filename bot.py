@@ -1,12 +1,15 @@
 import discord
 from discord.ext import commands, tasks
-import urllib.request
 import json
 import os
 import re
 import asyncio
 from datetime import datetime
-from html.parser import HTMLParser
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+import time
 
 CONFIG_FILE = "config.json"
 
@@ -48,55 +51,25 @@ def default_config():
         "seen_products": []
     }
 
-class LinkParser(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.links = []
-        self._href = None
-        self._text = []
-        self._in_a = False
-
-    def handle_starttag(self, tag, attrs):
-        if tag == "a":
-            self._in_a = True
-            self._text = []
-            for k, v in attrs:
-                if k == "href":
-                    self._href = v
-
-    def handle_endtag(self, tag):
-        if tag == "a" and self._in_a:
-            text = " ".join(self._text).strip()
-            if self._href and text:
-                self.links.append((self._href, text))
-            self._in_a = False
-            self._href = None
-            self._text = []
-
-    def handle_data(self, data):
-        if self._in_a:
-            self._text.append(data.strip())
-
-def fetch_html(url):
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "de-DE,de;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Connection": "keep-alive",
-        "Upgrade-Insecure-Requests": "1",
-    }
-    req = urllib.request.Request(url, headers=headers)
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            raw = resp.read()
-            try:
-                return raw.decode("utf-8")
-            except UnicodeDecodeError:
-                return raw.decode("latin-1", errors="replace")
-    except Exception as e:
-        print(f"[FEHLER] {url}: {e}", flush=True)
-        return None
+def get_driver():
+    options = Options()
+    options.add_argument("--headless=new")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option("useAutomationExtension", False)
+    chrome_bin = os.environ.get("CHROME_BIN", "/usr/bin/chromium")
+    if os.path.exists(chrome_bin):
+        options.binary_location = chrome_bin
+    chromedriver = os.environ.get("CHROMEDRIVER_PATH", "/usr/bin/chromedriver")
+    service = Service(executable_path=chromedriver)
+    driver = webdriver.Chrome(service=service, options=options)
+    driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+    return driver
 
 def extract_price(text):
     if not text:
@@ -114,53 +87,66 @@ def matches(text, keywords, blocked):
     return any(k.lower() in t for k in keywords) and not any(b.lower() in t for b in blocked)
 
 def check_rossmann(product):
-    html = fetch_html(product["url"])
-    if not html:
-        return {"name": product["name"], "url": product["url"], "available": False, "price": None}
-    page = html.lower()
-    available_keywords = ["in den warenkorb", "jetzt kaufen", "zum warenkorb", "add to cart"]
-    unavailable_keywords = ["nicht verfügbar", "ausverkauft", "nicht bestellbar", "out of stock"]
-    is_available = any(kw in page for kw in available_keywords)
-    is_unavailable = any(kw in page for kw in unavailable_keywords)
-    available = is_available and not is_unavailable
-    price = extract_price(html)
-    return {"name": product["name"], "url": product["url"], "available": available, "price": price}
+    driver = None
+    try:
+        driver = get_driver()
+        driver.get(product["url"])
+        time.sleep(3)
+        page = driver.page_source.lower()
+        available_keywords = ["in den warenkorb", "jetzt kaufen", "zum warenkorb"]
+        unavailable_keywords = ["nicht verfügbar", "ausverkauft", "nicht bestellbar"]
+        available = any(kw in page for kw in available_keywords) and not any(kw in page for kw in unavailable_keywords)
+        price = extract_price(driver.page_source)
+        return {"name": product["name"], "url": product["url"], "available": available, "price": price}
+    except Exception as e:
+        print(f"[ROSSMANN FEHLER] {product['name']}: {e}", flush=True)
+        return None
+    finally:
+        if driver:
+            driver.quit()
 
 def scrape_shop(shop, cfg):
-    print(f"Scanne {shop['name']}...", flush=True)
-    html = fetch_html(shop["url"])
-    if not html:
-        return []
-    parser = LinkParser()
-    parser.feed(html)
+    driver = None
     results = []
     seen_ids = set(cfg.get("seen_products", []))
-    for href, text in parser.links:
-        title = re.sub(r"\s+", " ", text).strip()
-        if len(title) < 8:
-            continue
-        price = extract_price(title)
-        if not matches(title, cfg["keywords"], cfg["blocked_keywords"]):
-            continue
-        if price and price > cfg["max_price_eur"]:
-            continue
-        if href.startswith("http"):
-            link = href
-        elif href.startswith("//"):
-            link = "https:" + href
-        elif href.startswith("/"):
-            from urllib.parse import urlparse
-            base = urlparse(shop["url"])
-            link = f"{base.scheme}://{base.netloc}{href}"
-        else:
-            continue
-        product_id = f"{shop['name']}::{title[:80]}"
-        if product_id in seen_ids:
-            continue
-        results.append({"shop": shop["name"], "title": title[:120], "price": price, "link": link, "id": product_id})
-        seen_ids.add(product_id)
+    try:
+        driver = get_driver()
+        driver.get(shop["url"])
+        time.sleep(4)
+        links = driver.find_elements(By.TAG_NAME, "a")
+        for link in links:
+            try:
+                title = link.text.strip()
+                href = link.get_attribute("href") or ""
+                if len(title) < 8 or not href.startswith("http"):
+                    continue
+                price = extract_price(title)
+                if not price:
+                    try:
+                        parent = link.find_element(By.XPATH, "./..")
+                        price = extract_price(parent.text)
+                    except:
+                        pass
+                if not matches(title, cfg["keywords"], cfg["blocked_keywords"]):
+                    continue
+                if price and price > cfg["max_price_eur"]:
+                    continue
+                product_id = f"{shop['name']}::{title[:80]}"
+                if product_id in seen_ids:
+                    continue
+                results.append({"shop": shop["name"], "title": title[:120], "price": price, "link": href, "id": product_id})
+                seen_ids.add(product_id)
+                if len(results) >= 8:
+                    break
+            except:
+                continue
+    except Exception as e:
+        print(f"[FEHLER] {shop['name']}: {e}", flush=True)
+    finally:
+        if driver:
+            driver.quit()
     print(f"{shop['name']}: {len(results)} neue Produkte", flush=True)
-    return results[:8]
+    return results
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -189,7 +175,6 @@ async def scan_shops():
     cfg = load_config()
     channel = bot.get_channel(cfg["channel_id"])
     if not channel:
-        print("[WARNUNG] Kanal nicht gefunden.", flush=True)
         return
     scan_shops.change_interval(minutes=max(5, cfg["interval_minutes"]))
 
