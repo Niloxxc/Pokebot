@@ -340,7 +340,15 @@ async def hilfe(ctx):
 
 @bot.event
 async def on_ready():
-    print(f"Bot eingeloggt als {bot.user}")
+    import sys
+    print(f"Bot eingeloggt als {bot.user}", flush=True)
+    print(f"Python: {sys.version}", flush=True)
+    try:
+        driver = get_driver()
+        driver.quit()
+        print("Chrome OK!", flush=True)
+    except Exception as e:
+        print(f"Chrome FEHLER: {e}", flush=True)
     scan_shops.change_interval(minutes=max(5, load_config()["interval_minutes"]))
     scan_shops.start()
 
