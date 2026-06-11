@@ -19,7 +19,22 @@
     {"name": "Kleinanzeigen Display", "url": "https://www.kleinanzeigen.de/s-pokemon-display/k0", "enabled": true},
     {"name": "Kleinanzeigen ETB", "url": "https://www.kleinanzeigen.de/s-elite-trainer-box-pokemon/k0", "enabled": true},
     {"name": "Kleinanzeigen TTB", "url": "https://www.kleinanzeigen.de/s-top-trainer-box-pokemon/k0", "enabled": true},
-    {"name": "Kleinanzeigen Blister", "url": "https://www.kleinanzeigen.de/s-pokemon-blister/k0", "enabled": true}
+    {"name": "Kleinanzeigen Blister", "url": "https://www.kleinanzeigen.de/s-pokemon-blister/k0", "enabled": true},
+    {"name": "Card Buddys", "url": "https://www.cardbuddys.de/search?q=pokemon+booster", "enabled": true},
+    {"name": "Cardsrfun", "url": "https://cardsrfun.de/search?q=pokemon+booster", "enabled": true},
+    {"name": "Comic Planet", "url": "https://www.comicplanet.de/search?q=pokemon+booster", "enabled": true},
+    {"name": "Farmers Shop", "url": "https://farmers-shop.de/search?q=pokemon+booster", "enabled": true},
+    {"name": "Games Island", "url": "https://games-island.eu/search?q=pokemon+booster", "enabled": true},
+    {"name": "Alza", "url": "https://www.alza.de/search.htm?exps=pokemon+booster", "enabled": true},
+    {"name": "Gate to the Games", "url": "https://www.gate-to-the-games.de/search?q=pokemon+booster", "enabled": true},
+    {"name": "TCGviert", "url": "https://tcgviert.com/search?q=pokemon+booster", "enabled": true},
+    {"name": "Pokegeodude", "url": "https://pokegeodude.shop/search?q=pokemon+booster", "enabled": true},
+    {"name": "Man of Games", "url": "https://www.man-of-games.de/search?q=pokemon+booster", "enabled": true},
+    {"name": "Duo Shop", "url": "https://www.duo-shop.de/search?q=pokemon+booster", "enabled": true},
+    {"name": "Fantasia Cards", "url": "https://fantasiacards.de/search?q=pokemon+booster", "enabled": true},
+    {"name": "Lotti Cards", "url": "https://www.lotticards.de/search?q=pokemon+booster", "enabled": true},
+    {"name": "Sapphire Cards", "url": "https://sapphire-cards.de/search?q=pokemon+booster", "enabled": true},
+    {"name": "Card Corner", "url": "https://www.card-corner.de/search?q=pokemon+booster", "enabled": true}
   ],
   "seen_products": []
 }
