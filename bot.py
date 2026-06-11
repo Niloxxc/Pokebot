@@ -63,16 +63,24 @@ def default_config():
 
 def get_driver():
     options = Options()
-    options.add_argument("--headless")
+    options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
     options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36")
     options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--remote-debugging-port=9222")
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option("useAutomationExtension", False)
-    driver = webdriver.Chrome(options=options)
+    # Chrome Pfad für Railway/Docker
+    chrome_bin = os.environ.get("CHROME_BIN", "/usr/bin/chromium")
+    if os.path.exists(chrome_bin):
+        options.binary_location = chrome_bin
+    from selenium.webdriver.chrome.service import Service
+    chromedriver = os.environ.get("CHROMEDRIVER_PATH", "/usr/bin/chromedriver")
+    service = Service(executable_path=chromedriver)
+    driver = webdriver.Chrome(service=service, options=options)
     driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
     return driver
 
