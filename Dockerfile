@@ -15,4 +15,5 @@ WORKDIR /app
 COPY . .
 RUN pip install discord.py selenium
 
-CMD ["python", "-u", "bot.py"]
+ENV PYTHONUNBUFFERED=1
+CMD ["python", "bot.py"]
