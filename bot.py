@@ -57,12 +57,7 @@ def get_driver():
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option("useAutomationExtension", False)
-    chrome_bin = os.environ.get("CHROME_BIN", "/usr/bin/chromium")
-    if os.path.exists(chrome_bin):
-        options.binary_location = chrome_bin
-    chromedriver = os.environ.get("CHROMEDRIVER_PATH", "/usr/bin/chromedriver")
-    service = Service(executable_path=chromedriver)
-    driver = webdriver.Chrome(service=service, options=options)
+    driver = webdriver.Chrome(options=options)
     driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
     return driver
 
