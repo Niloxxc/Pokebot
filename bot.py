@@ -300,6 +300,22 @@ async def scan_now(ctx):
     await ctx.send("🔍 Starte sofortigen Scan...")
     await scan_shops()
 
+@bot.command(name="chrometest")
+async def chrome_test(ctx):
+    await ctx.send("🔧 Teste Chrome...")
+    try:
+        loop = asyncio.get_event_loop()
+        def test():
+            driver = get_driver()
+            driver.get("https://www.google.com")
+            title = driver.title
+            driver.quit()
+            return title
+        title = await loop.run_in_executor(None, test)
+        await ctx.send(f"✅ Chrome funktioniert! Seite: {title}")
+    except Exception as e:
+        await ctx.send(f"❌ Chrome Fehler: {str(e)[:500]}")
+
 @bot.command(name="setprice")
 async def set_price(ctx, preis: float):
     cfg = load_config(); cfg["max_price_eur"] = preis; save_config(cfg)
